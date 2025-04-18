@@ -27,6 +27,14 @@ func main() {
 		ip := strings.Split(remoteAddr, ":")[0]
 		setSystemHost(host, net.ParseIP(ip))
 	})
+
+	g.GET("/set/docker/#dockerId/#network", func(ctx *goweb.Context) {
+		dockerId := ctx.GetUrlPathParam("dockerId")
+		network := ctx.GetUrlPathParam("network")
+		dockerName, dockerIp := getDockerNameIp(ctx, dockerId, network)
+		setSystemHost(dockerName, dockerIp)
+	})
+
 	if err := http.ListenAndServe(*listenAddr, g); err != nil {
 		slog.Error("listen failed", "err", err)
 	}
