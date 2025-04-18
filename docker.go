@@ -2,33 +2,59 @@ package main
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
+	"iter"
 	"log/slog"
 	"net"
+	"os/exec"
 	"strings"
 
 	"github.com/docker/docker/api/types/container"
-	"github.com/docker/docker/client"
 )
 
-func dockerInspect(ctx context.Context, id string) (container.InspectResponse, error) {
-	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
+func dockerInspect(ctx context.Context, id string) ([]*container.InspectResponse, error) {
+	var data []*container.InspectResponse
+	out, err := exec.CommandContext(ctx, "docker", "inspect", id).CombinedOutput()
 	if err != nil {
-		return container.InspectResponse{}, err
+		return nil, errors.New(string(out))
 	}
-	defer cli.Close()
-	return cli.ContainerInspect(ctx, id)
+	err = json.Unmarshal(out, &data)
+	return data, err
 }
 
-func getDockerNameIp(ctx context.Context, id string, network string) (string, net.IP) {
+func getDockerNameIp(ctx context.Context, id string) (string, map[string]net.IP) {
 	dockerInfo, err := dockerInspect(ctx, id)
 	if err != nil {
 		slog.Error("docker inspect failed", "id", id, "err", err)
 		return "", nil
 	}
-	name := strings.TrimPrefix(dockerInfo.Name, "/")
-	n, ok := dockerInfo.NetworkSettings.Networks[network]
-	if !ok {
-		return name, nil
+	for _, v := range dockerInfo {
+		name := strings.TrimPrefix(v.Name, "/")
+		if name != id {
+			continue
+		}
+		ips := make(map[string]net.IP, len(v.NetworkSettings.Networks))
+		for networkName, network := range v.NetworkSettings.Networks {
+			ips[networkName] = net.ParseIP(network.IPAddress)
+		}
+		return name, ips
 	}
-	return name, net.IP(n.IPAddress)
+	return "", nil
+}
+
+func parseDockerComposeContainerName(dockerCompose string) iter.Seq[string] {
+	return func(yield func(string) bool) {
+		for v := range strings.SplitSeq(dockerCompose, "\n") {
+			v := strings.ToLower(v)
+			if i := strings.Index(v, "container_name:"); i > 0 {
+				if m := strings.Index(v, "#"); m > 0 && m < i {
+					continue
+				}
+				if s := strings.Split(v, ":"); len(s) == 2 {
+					yield(strings.TrimSpace(s[1]))
+				}
+			}
+		}
+	}
 }

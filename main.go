@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"log/slog"
 	"net"
@@ -13,12 +14,32 @@ import (
 )
 
 var (
-	lock       sync.Mutex
-	listenAddr = flag.String("listen", "127.0.0.1:8080", "listen addr")
+	lock              sync.Mutex
+	listenAddr        = flag.String("listen", "127.0.0.1:8080", "listen addr")
+	dockercomposeFile = flag.String("compose", "", "docker compose")
+	network           = flag.String("network", "", "docker network")
+	suffix            = flag.String("suffix", ".docker.local", "suffix")
 )
 
 func main() {
 	flag.Parse()
+
+	if *dockercomposeFile != "" {
+		if *network == "" {
+			slog.Error("network is empty")
+			os.Exit(1)
+		}
+		data, err := os.ReadFile(*dockercomposeFile)
+		if err != nil {
+			slog.Error("read docker compose failed", "err", err)
+			os.Exit(1)
+		}
+		for name := range parseDockerComposeContainerName(string(data)) {
+			dockerName, dockerIps := getDockerNameIp(context.Background(), name)
+			setSystemHost(dockerName, dockerIps[*network])
+		}
+		return
+	}
 
 	g := goweb.New()
 	g.GET("/set/host/#host", func(ctx *goweb.Context) {
@@ -31,8 +52,8 @@ func main() {
 	g.GET("/set/docker/#dockerId/#network", func(ctx *goweb.Context) {
 		dockerId := ctx.GetUrlPathParam("dockerId")
 		network := ctx.GetUrlPathParam("network")
-		dockerName, dockerIp := getDockerNameIp(ctx, dockerId, network)
-		setSystemHost(dockerName, dockerIp)
+		dockerName, dockerIp := getDockerNameIp(ctx, dockerId)
+		setSystemHost(dockerName, dockerIp[network])
 	})
 
 	if err := http.ListenAndServe(*listenAddr, g); err != nil {
@@ -46,6 +67,8 @@ func setSystemHost(host string, ip net.IP) {
 	}
 	lock.Lock()
 	defer lock.Unlock()
+
+	host += *suffix
 
 	hosts, err := os.ReadFile("/etc/hosts")
 	if err != nil {
