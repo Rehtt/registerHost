@@ -3,6 +3,7 @@ module github.com/Rehtt/registerHost
 go 1.24.2
 
 require (
+	github.com/Rehtt/Kit v0.1.9-0.20250420052852-fd02d3d589ca
 	github.com/Rehtt/Kit/web v0.0.0-20250328063957-96290e7d9b71
 	github.com/docker/docker v28.1.0+incompatible
 )
@@ -18,5 +19,6 @@ require (
 	github.com/opencontainers/go-digest v1.0.0 // indirect
 	github.com/opencontainers/image-spec v1.1.1 // indirect
 	github.com/stretchr/testify v1.10.0 // indirect
+	golang.org/x/text v0.6.0 // indirect
 	gotest.tools/v3 v3.5.2 // indirect
 )

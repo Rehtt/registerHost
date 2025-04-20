@@ -10,33 +10,37 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/Rehtt/Kit/slice"
 	goweb "github.com/Rehtt/Kit/web"
 )
 
 var (
 	lock              sync.Mutex
 	listenAddr        = flag.String("listen", "127.0.0.1:8080", "listen addr")
-	dockercomposeFile = flag.String("compose", "", "docker compose")
+	dockercomposeFile slice.FlagSetArray[string]
 	network           = flag.String("network", "", "docker network")
 	suffix            = flag.String("suffix", ".docker.local", "suffix")
 )
 
 func main() {
+	flag.Var(&dockercomposeFile, "compose", "docker compose")
 	flag.Parse()
 
-	if *dockercomposeFile != "" {
-		if *network == "" {
-			slog.Error("network is empty")
-			os.Exit(1)
-		}
-		data, err := os.ReadFile(*dockercomposeFile)
-		if err != nil {
-			slog.Error("read docker compose failed", "err", err)
-			os.Exit(1)
-		}
-		for name := range parseDockerComposeContainerName(string(data)) {
-			dockerName, dockerIps := getDockerNameIp(context.Background(), name)
-			setSystemHost(dockerName, dockerIps[*network])
+	if len(dockercomposeFile.Get()) > 0 {
+		for _, v := range dockercomposeFile.Get() {
+			if *network == "" {
+				slog.Error("network is empty")
+				os.Exit(1)
+			}
+			data, err := os.ReadFile(v)
+			if err != nil {
+				slog.Error("read docker compose failed", "err", err)
+				os.Exit(1)
+			}
+			for name := range parseDockerComposeContainerName(string(data)) {
+				dockerName, dockerIps := getDockerNameIp(context.Background(), name)
+				setSystemHost(dockerName, dockerIps[*network])
+			}
 		}
 		return
 	}
