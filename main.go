@@ -23,6 +23,7 @@ var (
 )
 
 func main() {
+	dockercomposeFile.HandleSet = func(v string) string { return v }
 	flag.Var(&dockercomposeFile, "compose", "docker compose")
 	flag.Parse()
 
